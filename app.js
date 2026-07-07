@@ -623,6 +623,9 @@
 
     function viewFocus(c) {
         var f = state.computed.focus;
+        var org = state.computed.org;
+        var allowanceGap = org.totalUnusedCredits * state.rate;
+        var allowanceGapPct = org.totalLimit > 0 ? org.totalUnusedCredits / org.totalLimit : 0;
         var same = Math.abs(state.rate - 0.01) < 1e-9;
         c.innerHTML = header('FOCUS Cost View', 'FinOps FOCUS-style cost columns derived from org credits used at the current rate.') +
             '<div class="metrics-grid">' +
@@ -630,6 +633,7 @@
             metricCard('Contracted Cost', fmtMoney(f.contractedCost), 'at ' + fmtMoney(state.rate) + '/credit') +
             metricCard('Effective Cost', fmtMoney(f.effectiveCost), '= contracted') +
             metricCard('Billed Cost', fmtMoney(f.billedCost), '= contracted') +
+            metricCard('Allowance Gap $', fmtMoney(allowanceGap), fmtPct(allowanceGapPct) + ' of allowance unused') +
             metricCard('Savings vs List', fmtMoney(f.savingsVsList), same ? 'zero at list rate' : 'from rate discount', f.savingsVsList > 0 ? 'accent-green' : '') +
             '</div>' +
             '<div class="info-box"><p>' + (same
@@ -644,7 +648,9 @@
             ['Usage Cohorts', 'Six tiers by percentile of credits used across all users: Light (&le;50th), Regular (&le;75th), Engaged (&le;90th), Native (&le;95th), Power (&le;99th), Frontier (top 1%).'],
             ['Standout Ratio', 'A user\'s credits used divided by their department average. A ratio of 2x or higher earns a star.'],
             ['Slice By', 'The dimension used to group the report: Department, Business Unit, Job Family, Job Title, Cost Center, Country, or Manager (only dimensions present in the data are offered).'],
-            ['FOCUS columns', 'List = used x $0.01; Contracted / Effective / Billed = used x current rate; Savings vs List = list minus contracted.'],
+            ['FOCUS columns', 'List = used x $0.01; Contracted / Effective / Billed = used x current rate; Allowance Gap $ = unused credits x current rate; Savings vs List = list minus contracted.'],
+            ['Allowance Gap ($ / %)', 'The under-utilized portion of the allowance: unused credits (max(0, limit - used)) valued at the current rate, and as a percentage of total allowance. Surfaced on the FOCUS Cost View.'],
+            ['Budget status / segments', 'Each user is flagged Under (below 85% of allowance), Near (85-100%), or Over (above 100%); group status applies the same thresholds to aggregate utilization.'],
             ['Rate per credit', 'The single knob that converts credits to dollars. Every dollar figure in this report derives from it.']
         ];
         var notes = [
@@ -827,7 +833,7 @@
         $('landing').hidden = true;
         $('dashboard').hidden = false;
         $('demoBanner').hidden = !state.demoActive;
-        $('dashFooter').innerHTML = state.demoActive ? '<p>Synthetic demo data - not for real decisions. <a href="PRIVACY.md">Privacy</a></p>' : '<p>100% client-side. <a href="PRIVACY.md">Privacy</a></p>';
+        $('dashFooter').innerHTML = state.demoActive ? '<p>Synthetic demo data - not for real decisions. <a href="PRIVACY.md">Privacy</a> &middot; v1.1</p>' : '<p>100% client-side. <a href="PRIVACY.md">Privacy</a> &middot; v1.1</p>';
         $('rateWhatIf').value = state.rate;
         buildTabs();
         buildSliceBy();
