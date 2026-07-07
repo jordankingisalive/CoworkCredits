@@ -1,11 +1,13 @@
 /* sw.js - cache-first, versioned service worker for offline use. */
-var CACHE_NAME = 'cowork-credits-v1.1';
+var CACHE_NAME = 'cowork-credits-v1.1-2';
 var PRECACHE = [
     './',
     './index.html',
     './styles.css',
     './app.js',
     './demo-data.js',
+    './finops.html',
+    './finops.js',
     './lib/jszip.min.js',
     './lib/pptxgen.bundle.js',
     './lib/html2canvas.min.js',
