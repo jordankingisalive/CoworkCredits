@@ -5,14 +5,15 @@
 (function () {
     'use strict';
 
-    var FALLBACK_LIMIT = 400; // mirrors app.js state.fallbackLimit
-
     // ------------------------------------------------------------ state
     var state = {
         users: [],
         listRate: 0.01,
         contractedRate: 0.01,
-        allocDim: 'department' // Department / Cost Center / Business Unit toggle
+        allocDim: 'department', // Department / Cost Center / Business Unit toggle
+        fallbackLimit: 400,     // loader-adjustable; used when no per-user limit column
+        demoActive: false,
+        pending: { entra: null, credits: null }
     };
 
     // --------------------------------------------------- utilities (from app.js)
@@ -131,8 +132,8 @@
             var erow = byUpn[upn] || {};
             var get = function (map, row, field) { return map[field] ? String(row[map[field]] || '').trim() : ''; };
 
-            var limit = creditMap.creditLimit ? toNumber(crow[creditMap.creditLimit]) : FALLBACK_LIMIT;
-            if (!creditMap.creditLimit || (limit <= 0 && !creditMap.creditLimit)) limit = FALLBACK_LIMIT;
+            var limit = creditMap.creditLimit ? toNumber(crow[creditMap.creditLimit]) : state.fallbackLimit;
+            if (!creditMap.creditLimit || (limit <= 0 && !creditMap.creditLimit)) limit = state.fallbackLimit;
 
             users.push({
                 upn: upn,
@@ -250,17 +251,21 @@
             ['Provider', 'Microsoft'],
             ['Service', 'Microsoft 365 Copilot Cowork Credits'],
             ['Charge category', 'Usage'],
+            ['Data source', state.demoActive ? 'Synthetic demo' : 'Your uploaded exports'],
             ['Billing period', 'Single-month snapshot'],
             ['Users in scope', fmtInt(m.org.users)]
         ];
         var cells = items.map(function (it) {
             return '<div class="scope-item"><div class="scope-k">' + esc(it[0]) + '</div><div class="scope-v">' + esc(it[1]) + '</div></div>';
         }).join('');
+        var sourceNote = state.demoActive
+            ? 'All data is <strong>synthetic</strong> and must not be used for real financial decisions. '
+            : 'This report is computed locally from the files you loaded; nothing leaves your browser. ';
         var note = '<div class="scope-note"><strong>Scope &amp; honesty note.</strong> ' +
             'This is a single-month usage snapshot priced with one list rate and one contracted rate. ' +
             'Out of scope by design: no amortization of commitments, no shared-cost split, and no ' +
-            'time-series / forecasting / anomaly detection. All data is <strong>synthetic</strong> and ' +
-            'must not be used for real financial decisions. Because a credit model is pure consumption, ' +
+            'time-series / forecasting / anomaly detection. ' + sourceNote +
+            'Because a credit model is pure consumption, ' +
             'a single blended rate is the only price knob modelled.</div>';
         el.className = 'scope-strip';
         el.innerHTML = cells + note;
@@ -549,12 +554,102 @@
         if (c) { var cv = parseFloat(c.value); state.contractedRate = isFinite(cv) && cv >= 0 ? cv : 0; }
     }
 
-    function init() {
-        var entra = parseCSV(window.DEMO_ENTRA_CSV || '');
-        var credits = parseCSV(window.DEMO_CREDITS_CSV || '');
-        state.users = buildUsers(entra, credits);
+    // ------------------------------------------------------------ data loading
+    function showError(msg) {
+        var e = $('finopsLandingError');
+        if (!e) { alert(msg); return; }
+        e.textContent = msg; e.hidden = false;
+    }
 
+    function readFile(file) {
+        return new Promise(function (resolve, reject) {
+            var reader = new FileReader();
+            reader.onload = function () { resolve(String(reader.result)); };
+            reader.onerror = function () { reject(new Error('Could not read file')); };
+            reader.readAsText(file);
+        });
+    }
+
+    function wireDropzone(dzId, inputId, statusId, which) {
+        var dz = $(dzId), input = $(inputId), status = $(statusId);
+        if (!dz || !input || !status) return;
+        dz.addEventListener('click', function () { input.click(); });
+        dz.addEventListener('dragover', function (e) { e.preventDefault(); dz.classList.add('dragover'); });
+        dz.addEventListener('dragleave', function () { dz.classList.remove('dragover'); });
+        dz.addEventListener('drop', function (e) {
+            e.preventDefault(); dz.classList.remove('dragover');
+            if (e.dataTransfer.files && e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0], dz, status, which);
+        });
+        input.addEventListener('change', function () { if (input.files[0]) handleFile(input.files[0], dz, status, which); });
+    }
+
+    function handleFile(file, dz, status, which) {
+        var err = $('finopsLandingError'); if (err) err.hidden = true;
+        readFile(file).then(function (text) {
+            state.pending[which] = parseCSV(text);
+            status.textContent = file.name + ' - ' + fmtInt(state.pending[which].length) + ' rows';
+            dz.classList.add('loaded');
+            var gen = $('btnGenerateF');
+            if (gen) gen.disabled = !(state.pending.entra && state.pending.credits);
+        }).catch(function () { showError('Failed to read ' + file.name); });
+    }
+
+    function startFrom(entraRows, creditRows, demo) {
+        state.demoActive = !!demo;
+        var fb = $('fallbackLimitF');
+        if (fb) { var fbv = parseFloat(fb.value); state.fallbackLimit = isFinite(fbv) && fbv > 0 ? fbv : 400; }
+        state.users = buildUsers(entraRows, creditRows);
+        if (!state.users.length) { showError('No users could be built from these files. Check that the credit file has a user principal name column.'); return; }
+        showReport();
+    }
+
+    function showReport() {
+        var landing = $('finopsLanding'), report = $('finopsReport');
+        if (landing) landing.hidden = true;
+        if (report) report.hidden = false;
+        var banner = $('finopsDemoBanner'); if (banner) banner.hidden = !state.demoActive;
+        var badge = $('badgeMode');
+        if (badge) badge.innerHTML = state.demoActive ? 'Synthetic &middot; demo data' : 'Your data &middot; single-month snapshot';
+        var foot = $('finopsFooter');
+        if (foot) foot.innerHTML = state.demoActive
+            ? 'Synthetic data &middot; 100% client-side &middot; <a href="PRIVACY.md">Privacy</a> &middot; <a href="index.html">Standard report</a> &middot; v1.1'
+            : '100% client-side &middot; your files never leave your browser &middot; <a href="PRIVACY.md">Privacy</a> &middot; <a href="index.html">Standard report</a> &middot; v1.1';
         readRates();
+        render();
+        window.scrollTo(0, 0);
+    }
+
+    function loadDemo() {
+        if (!window.DEMO_ENTRA_CSV || !window.DEMO_CREDITS_CSV) { showError('Demo data not available.'); return; }
+        startFrom(parseCSV(window.DEMO_ENTRA_CSV), parseCSV(window.DEMO_CREDITS_CSV), true);
+    }
+
+    function resetToLanding() {
+        state.pending = { entra: null, credits: null };
+        state.users = []; state.demoActive = false;
+        var report = $('finopsReport'), landing = $('finopsLanding');
+        if (report) report.hidden = true;
+        if (landing) landing.hidden = false;
+        ['statusEntraF', 'statusCreditsF'].forEach(function (id) { var s = $(id); if (s) s.textContent = 'No file selected'; });
+        ['dzEntraF', 'dzCreditsF'].forEach(function (id) { var d = $(id); if (d) d.classList.remove('loaded'); });
+        ['fileEntraF', 'fileCreditsF'].forEach(function (id) { var f = $(id); if (f) f.value = ''; });
+        var gen = $('btnGenerateF'); if (gen) gen.disabled = true;
+        var err = $('finopsLandingError'); if (err) err.hidden = true;
+        window.scrollTo(0, 0);
+    }
+
+    function init() {
+        wireDropzone('dzEntraF', 'fileEntraF', 'statusEntraF', 'entra');
+        wireDropzone('dzCreditsF', 'fileCreditsF', 'statusCreditsF', 'credits');
+
+        var gen = $('btnGenerateF');
+        if (gen) gen.addEventListener('click', function () {
+            if (state.pending.entra && state.pending.credits) startFrom(state.pending.entra, state.pending.credits, false);
+        });
+        var demoBtn = $('btnDemoF'); if (demoBtn) demoBtn.addEventListener('click', loadDemo);
+        var resetBtn = $('btnResetF'); if (resetBtn) resetBtn.addEventListener('click', resetToLanding);
+
+        // Live rate controls (inside the report; wired once).
         var l = $('rateList'), c = $('rateContracted');
         if (l) l.addEventListener('input', function () { readRates(); render(); });
         if (c) c.addEventListener('input', function () { readRates(); render(); });
@@ -566,7 +661,8 @@
             if (btn && btn.getAttribute('data-dim')) { state.allocDim = btn.getAttribute('data-dim'); render(); }
         });
 
-        render();
+        // Deep-link / embed convenience: ?demo=1 opens straight into the demo report.
+        if (/[?&]demo=1\b/.test(location.search)) loadDemo();
     }
 
     if (document.readyState === 'loading') {
