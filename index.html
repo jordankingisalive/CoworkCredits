@@ -33,7 +33,7 @@
                 <div class="step-number">1</div>
                 <div class="step-content">
                     <h3>Export your Entra users</h3>
-                    <p>From Microsoft Entra admin center, export the user list as CSV. It supplies the organizational attributes &mdash; department, business unit, job family, cost center, country, and manager.</p>
+                    <p>From Microsoft Entra admin center, export the user list as CSV. It supplies the organizational attributes &mdash; department, business unit, job family, cost center, country, and manager. You can add several group exports and they are merged on user principal name.</p>
                     <div class="info-box"><p><small>Expected columns (any subset): User Principal Name, Display Name, Department, Job Title, Job Family, Cost Center, Business Unit, Country / Usage Location, Manager.</small></p></div>
                 </div>
             </div>
@@ -67,10 +67,11 @@
                             <polyline points="17 8 12 3 7 8"></polyline>
                             <line x1="12" y1="3" x2="12" y2="15"></line>
                         </svg>
-                        <p><strong>Drop the Entra CSV here</strong> or click to browse</p>
-                        <p class="dz-status" id="statusEntra">No file selected</p>
-                        <input type="file" id="fileEntra" accept=".csv,text/csv" hidden>
+                        <p><strong>Drop one or more Entra CSVs here</strong> or click to browse</p>
+                        <p class="dz-status" id="statusEntra">No files selected</p>
+                        <input type="file" id="fileEntra" accept=".csv,text/csv" multiple hidden>
                     </div>
+                    <ul id="entraFiles" class="entra-files"></ul>
                 </div>
                 <div>
                     <label class="dz-label">Copilot credit / Cost Management export (CSV)</label>
@@ -139,6 +140,12 @@
                 <div class="config-item">
                     <label for="sliceBy">Slice by</label>
                     <select id="sliceBy"></select>
+                </div>
+                <div class="config-item">
+                    <div class="value-filter-head"><label>Filter to values</label><button type="button" id="clearValueFilter" class="link-btn" hidden>Clear</button></div>
+                    <input type="text" id="valueFilterSearch" class="value-filter-search" placeholder="Search values&hellip;" hidden>
+                    <div id="valueFilter" class="value-filter"></div>
+                    <small>Click values to filter the whole report. None selected = all.</small>
                 </div>
                 <div class="config-item">
                     <label for="rateWhatIf">Rate per credit ($)</label>
